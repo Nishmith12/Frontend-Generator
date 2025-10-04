@@ -50,7 +50,8 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
-  const [framework, setFramework] = useState('html'); // New state for framework
+  const [framework, setFramework] = useState('html');
+  const [lastGenerationInfo, setLastGenerationInfo] = useState({ tokens: 0, cost: 0 }); // New state for token/cost tracking
 
   const iframeRef = useRef(null);
 
@@ -67,9 +68,7 @@ function App() {
           setShowToast(true);
           setTimeout(() => setShowToast(false), 2000);
         }
-      } catch (e) {
-        console.error("Failed to decompress shared code:", e);
-      }
+      } catch (e) { console.error("Failed to decompress shared code:", e); }
     } else {
       const savedChats = localStorage.getItem('ai-frontend-chats');
       if (savedChats) setChats(JSON.parse(savedChats));
@@ -126,8 +125,8 @@ function App() {
     
     const newUserMessage = { role: 'user', content: prompt };
     const updatedHistoryForApi = [...historyForApi, newUserMessage];
-
-    const systemPrompt = systemPrompts[framework]; // Select the correct prompt
+    
+    const systemPrompt = systemPrompts[framework];
 
     const payload = {
         model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
@@ -152,10 +151,19 @@ function App() {
       
       const result = await response.json();
       const code = result.choices?.[0]?.message?.content;
+      const usage = result.usage; // Get usage data from response
       
       if (code) {
         const cleanedCode = code.replace(/```(jsx|javascript|js|html|css|vue|)\s*|```/g, '').trim();
         setGeneratedCode(cleanedCode);
+        
+        if (usage) {
+          setLastGenerationInfo({
+            tokens: usage.total_tokens,
+            cost: usage.total_cost
+          });
+        }
+        
         const newAssistantMessage = { role: 'assistant', content: cleanedCode };
         
         setChats(prevChats => prevChats.map(chat => 
@@ -179,6 +187,7 @@ function App() {
     setActiveChatId(null);
     setPrompt('');
     setGeneratedCode('// Start a new chat by typing a prompt or choosing an example.');
+    setLastGenerationInfo({ tokens: 0, cost: 0 }); // Reset stats on new chat
   };
   
   const handleSelectChat = (chatId) => {
@@ -252,7 +261,14 @@ function App() {
           </button>
           <div className="flex justify-between items-center w-full">
             <h1 className="text-2xl font-bold text-sky-500">AI Frontend Generator</h1>
-            <span className="text-sm text-slate-400">Powered by OpenRouter</span>
+            <div className="flex items-center gap-4">
+                <div className="text-right">
+                    <span className="text-xs text-slate-400 block">Last Gen: {lastGenerationInfo.tokens.toLocaleString()} tokens</span>
+                    <span className="text-xs text-green-400 block">Cost: ${lastGenerationInfo.cost.toFixed(6)}</span>
+                </div>
+                <span className="text-sm text-slate-400 hidden sm:block">|</span>
+                <span className="text-sm text-slate-400 hidden sm:block">Powered by OpenRouter</span>
+            </div>
           </div>
         </header>
 
