@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid'; // We need a library to generate unique IDs
+import { v4 as uuidv4 } from 'uuid';
+import Editor from '@monaco-editor/react'; // Import the new code editor
 
 // --- Helper Components ---
 
@@ -66,7 +67,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Prevent saving an empty array on first load
     if (chats.length > 0) {
       localStorage.setItem('ai-frontend-chats', JSON.stringify(chats));
     }
@@ -116,7 +116,13 @@ function App() {
     const newUserMessage = { role: 'user', content: prompt };
     const updatedHistoryForApi = [...historyForApi, newUserMessage];
 
-    const systemPrompt = `You are an expert frontend developer...`; // Abridged for clarity
+    const systemPrompt = `You are an expert frontend developer specializing in clean, modern web design. Your task is to generate or modify a single, self-contained HTML file based on the user's request.
+
+Rules:
+1.  **Single File:** All HTML, CSS, and JavaScript must be in one .html file.
+2.  **Styling:** Use Tailwind CSS for all styling. You MUST include the Tailwind CDN script ('<script src="https://cdn.tailwindcss.com"></script>') in the <head>.
+3.  **Conversational Edits:** If the user's prompt is a follow-up request to modify existing code, you MUST return the complete, modified HTML file. Do not only return the changed snippet.
+4.  **Code Only:** Your response must ONLY contain the raw HTML code. Do not include any explanations, comments, or markdown ticks like \`\`\`html.`;
 
     const payload = {
         model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
@@ -275,8 +281,20 @@ function App() {
                   <h2 className="text-lg font-semibold">Generated Code</h2>
                   <button onClick={handleCopyClick} className="bg-slate-700 hover:bg-slate-600 text-sm font-medium py-1 px-3 rounded-md">Copy</button>
                 </div>
-                <div className="flex-grow h-0">
-                  <pre className="h-full w-full"><code className="h-full block overflow-auto p-4 text-sm bg-slate-900 text-slate-300 font-mono">{generatedCode}</code></pre>
+                {/* --- THIS IS THE UPGRADED PART --- */}
+                <div className="flex-grow h-0 w-full">
+                  <Editor
+                    height="100%"
+                    language="html"
+                    theme="vs-dark"
+                    value={generatedCode}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      wordWrap: 'on',
+                      scrollBeyondLastLine: false,
+                    }}
+                  />
                 </div>
               </div>
             </div>
