@@ -26,6 +26,26 @@ function Toast({ message, show }) {
   );
 }
 
+// Array of prompt templates for the buttons
+const promptTemplates = [
+  {
+    title: 'Hero Section',
+    prompt: 'A modern, professional hero section for a SaaS product named "InnovateAI". It should have a catchy title, a short descriptive paragraph, and two buttons: "Get Started for Free" and "View Pricing".',
+  },
+  {
+    title: 'Login Form',
+    prompt: 'A clean and simple login form with fields for "Email" and "Password", a "Remember me" checkbox, a "Sign In" button, and a "Forgot your password?" link.',
+  },
+  {
+    title: 'Pricing Page',
+    prompt: 'A pricing page with three tiers: "Basic", "Pro", and "Enterprise". Each tier should have a title, a price, a short list of key features, and a "Sign Up" button. The "Pro" tier should be highlighted as the most popular.',
+  },
+  {
+    title: 'Contact Form',
+    prompt: 'A contact form with fields for "Full Name", "Email Address", "Subject", and "Message". Include a "Send Message" submit button.',
+  },
+];
+
 // Main App Component
 function App() {
   // IMPORTANT: Paste your OpenRouter API Key here
@@ -157,10 +177,28 @@ Rules:
               onChange={(e) => setPrompt(e.target.value)}
               disabled={isLoading}
             />
+            
+            {/* New Prompt Templates Section */}
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-slate-400 mb-2">Or try an example:</label>
+              <div className="flex flex-wrap gap-2">
+                {promptTemplates.map((template, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setPrompt(template.prompt)}
+                    disabled={isLoading}
+                    className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-sm font-medium py-1 px-3 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    {template.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             <button 
               id="generate-btn" 
-              className="mt-4 w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 shadow-lg shadow-sky-500/20 hover:shadow-xl hover:shadow-cyan-500/20"
+              className="mt-5 w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 shadow-lg shadow-sky-500/20 hover:shadow-xl hover:shadow-cyan-500/20"
               onClick={handleGenerateClick}
               disabled={isLoading}
             >
