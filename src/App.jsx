@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Editor from '@monaco-editor/react';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
+
 
 // --- Helper Components ---
 function Toast({ message, show }) {
@@ -18,9 +19,11 @@ function Toast({ message, show }) {
   );
 }
 
+
 function MenuIcon() {
   return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
 }
+
 
 const promptTemplates = [
     { title: 'Hero Section', prompt: 'A modern, professional hero section for a SaaS product named "CodeGenius". It should have a catchy title, a short descriptive paragraph, and two buttons: "Get Started for Free" and "View Pricing".' },
@@ -29,17 +32,20 @@ const promptTemplates = [
     { title: 'Contact Form', prompt: 'A contact form with fields for "Full Name", "Email Address", "Subject", and "Message". Include a "Send Message" submit button.' },
 ];
 
+
 // --- System Prompts for Different Frameworks ---
 const systemPrompts = {
-  html: `You are an expert frontend developer specializing in clean, modern web design using Tailwind CSS. Your task is to generate a single, self-contained HTML file based on the user's request. Rules: 1. All HTML, CSS, and JavaScript must be in one .html file. 2. Use Tailwind CSS for all styling via the CDN (<script src="https://cdn.tailwindcss.com"></script>). 3. Use placeholder services like https://placehold.co/ for images. 4. Your response must ONLY contain the raw HTML code, with no explanations or markdown ticks.`,
-  react: `You are an expert React developer who creates clean, functional components. Your task is to generate a single JSX file for a React functional component based on the user's request. Rules: 1. Use React hooks (useState, useEffect, etc.) for any state or logic. 2. Use Tailwind CSS classes for all styling (assume Tailwind is already configured in the project). 3. Do not include 'import React...' as it is assumed to be available. 4. Your response must ONLY contain the raw JSX code for the component, starting with 'function ComponentName() { ... }'. Do not include explanations or markdown ticks.`,
-  vue: `You are an expert Vue.js developer who builds elegant and efficient single-file components. Your task is to generate a complete single-file component (.vue) based on the user's request. Rules: 1. The component must be self-contained with <template>, <script setup>, and <style scoped> blocks. 2. Use the Composition API with <script setup>. 3. Use Tailwind CSS classes for all styling within the <template> block. 4. Your response must ONLY contain the raw code for the .vue file. Do not include explanations or markdown ticks.`,
+  html: `You are an expert frontend developer specializing in clean, modern web design using Tailwind CSS. Your task is to generate a single, self-contained HTML file based on the user's request. Rules: 1. All HTML, CSS, and JavaScript must be in one .html file. 2. Use Tailwind CSS for all styling via the CDN (<script src="https://cdn.tailwindcss.com"></script>). 3. Use placeholder services like [https://placehold.co/](https://placehold.co/) for images. 4. Your response must ONLY contain the raw HTML code, with no explanations or markdown ticks. 5. Keep the code concise and under 3000 characters when possible.`,
+  react: `You are an expert React developer who creates clean, functional components. Your task is to generate a single JSX file for a React functional component based on the user's request. Rules: 1. Use React hooks (useState, useEffect, etc.) for any state or logic. 2. Use Tailwind CSS classes for all styling (assume Tailwind is already configured in the project). 3. Do not include 'import React...' as it is assumed to be available. 4. Your response must ONLY contain the raw JSX code for the component, starting with 'function ComponentName() { ... }'. Do not include explanations or markdown ticks. 5. Keep the code concise and under 3000 characters when possible.`,
+  vue: `You are an expert Vue.js developer who builds elegant and efficient single-file components. Your task is to generate a complete single-file component (.vue) based on the user's request. Rules: 1. The component must be self-contained with <template>, <script setup>, and <style scoped> blocks. 2. Use the Composition API with <script setup>. 3. Use Tailwind CSS classes for all styling within the <template> block. 4. Your response must ONLY contain the raw code for the .vue file. Do not include explanations or markdown ticks. 5. Keep the code concise and under 3000 characters when possible.`,
 };
+
 
 
 // --- Main App Component ---
 function App() {
   const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+
 
   const [prompt, setPrompt] = useState('');
   const [generatedCode, setGeneratedCode] = useState('// Your generated code will appear here...');
@@ -51,9 +57,13 @@ function App() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [framework, setFramework] = useState('html');
-  const [lastGenerationInfo, setLastGenerationInfo] = useState({ tokens: 0, cost: 0 }); // Token/Cost Tracker State
+  const [lastGenerationInfo, setLastGenerationInfo] = useState({ tokens: 0, cost: 0 });
+
 
   const iframeRef = useRef(null);
+  const editorRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
 
   // --- Effects ---
   useEffect(() => {
@@ -75,20 +85,40 @@ function App() {
     }
   }, []);
 
+
   useEffect(() => {
     if (chats.length > 0) localStorage.setItem('ai-frontend-chats', JSON.stringify(chats));
   }, [chats]);
+
 
   useEffect(() => {
     if (iframeRef.current) {
       if (framework === 'html') {
         iframeRef.current.srcdoc = generatedCode;
       } else {
-        // Preview Guard: Prevent crash when rendering non-HTML code
         iframeRef.current.srcdoc = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#555;padding:1rem;text-align:center;">Live preview is only available for HTML. You can test React/Vue components in a dedicated development environment.</div>`;
       }
     }
   }, [generatedCode, framework]);
+
+  // Cleanup editor on unmount
+  useEffect(() => {
+    return () => {
+      if (editorRef.current) {
+        editorRef.current.dispose();
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+
+  // --- Monaco Editor Mount Handler ---
+  const handleEditorDidMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+  }, []);
+
 
   // --- Core Functions ---
   const handleGenerateClick = async () => {
@@ -102,12 +132,21 @@ function App() {
       return;
     }
 
+    // Cancel any existing API request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+
     setIsLoading(true);
     setGeneratedCode(`// Generating ${framework.toUpperCase()} code, please wait...`);
     setError(null);
 
+
     let currentChatId = activeChatId;
     let historyForApi = [];
+
 
     if (!currentChatId) {
       const newChatId = uuidv4();
@@ -129,10 +168,13 @@ function App() {
     
     const systemPrompt = systemPrompts[framework];
 
+
     const payload = {
         model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
-        messages: [ { role: "system", content: systemPrompt }, ...updatedHistoryForApi ]
+        messages: [ { role: "system", content: systemPrompt }, ...updatedHistoryForApi ],
+        max_tokens: 2000 // Limit token generation to prevent crashes
     };
+
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -143,8 +185,10 @@ function App() {
             'HTTP-Referer': window.location.href,
             'X-Title': 'AI Frontend Generator'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: abortControllerRef.current.signal
       });
+      
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`API request failed with status: ${response.status}. Body: ${errText}`);
@@ -152,21 +196,27 @@ function App() {
       
       const result = await response.json();
       const code = result.choices?.[0]?.message?.content;
-      const usage = result.usage; // Get usage data from response
+      const usage = result.usage;
       
       if (code) {
-        const cleanedCode = code.replace(/```(jsx|javascript|js|html|css|vue|)\s*|```/g, '').trim();
-        setGeneratedCode(cleanedCode);
+        const cleanedCode = code.replace(/``````/g, '').trim();
         
-        // Update Token Tracker
+        // Limit code size to prevent memory issues
+        const maxCodeLength = 50000;
+        const finalCode = cleanedCode.length > maxCodeLength 
+          ? cleanedCode.substring(0, maxCodeLength) + '\n// ... (code truncated for performance)'
+          : cleanedCode;
+        
+        setGeneratedCode(finalCode);
+        
         if (usage) {
           setLastGenerationInfo({
-            tokens: usage.total_tokens,
-            cost: usage.total_cost
+            tokens: usage.total_tokens || 0,
+            cost: usage.total_cost || 0
           });
         }
         
-        const newAssistantMessage = { role: 'assistant', content: cleanedCode };
+        const newAssistantMessage = { role: 'assistant', content: finalCode };
         
         setChats(prevChats => prevChats.map(chat => 
           chat.id === currentChatId 
@@ -178,18 +228,25 @@ function App() {
         throw new Error("Received an empty or invalid response from the API.");
       }
     } catch (err) {
-      setError(err.message.split('Body:')[0]);
-      setGeneratedCode(`// Error: ${err.message}`);
+      if (err.name === 'AbortError') {
+        console.log('Request was cancelled');
+        setGeneratedCode('// Request cancelled');
+      } else {
+        setError(err.message.split('Body:')[0]);
+        setGeneratedCode(`// Error: ${err.message}`);
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
+
 
   const handleNewChat = () => {
     setActiveChatId(null);
     setPrompt('');
     setGeneratedCode('// Start a new chat by typing a prompt or choosing an example.');
-    setLastGenerationInfo({ tokens: 0, cost: 0 }); // Reset stats on new chat
+    setLastGenerationInfo({ tokens: 0, cost: 0 });
   };
   
   const handleSelectChat = (chatId) => {
@@ -208,6 +265,7 @@ function App() {
     if (activeChatId === chatId) handleNewChat();
   };
 
+
   const handleCopyClick = () => {
     if (!generatedCode || generatedCode.startsWith('//')) return;
     navigator.clipboard.writeText(generatedCode).then(() => {
@@ -216,6 +274,7 @@ function App() {
       setTimeout(() => setShowToast(false), 2000);
     });
   };
+
 
   const handleShareClick = () => {
     if (!generatedCode || generatedCode.startsWith('//')) {
@@ -232,6 +291,7 @@ function App() {
       setTimeout(() => setShowToast(false), 2000);
     });
   };
+
 
   return (
     <div className="h-screen flex font-sans bg-gradient-to-br from-slate-900 to-gray-900 text-white">
@@ -256,6 +316,7 @@ function App() {
         </nav>
       </aside>
 
+
       <div className="flex-1 flex flex-col h-screen">
         <header className="bg-slate-900/70 backdrop-blur-sm shadow-lg p-4 z-10 border-b border-slate-800 flex items-center">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="mr-4 p-1 rounded-md hover:bg-slate-800">
@@ -273,6 +334,7 @@ function App() {
             </div>
           </div>
         </header>
+
 
         <main className="flex-grow container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
           <div className="flex flex-col h-full min-h-0">
@@ -342,7 +404,17 @@ function App() {
                   language={framework === 'html' ? 'html' : 'javascript'}
                   theme="vs-dark"
                   value={generatedCode}
-                  options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', scrollBeyondLastLine: false }}
+                  onMount={handleEditorDidMount}
+                  options={{ 
+                    minimap: { enabled: false }, 
+                    fontSize: 14, 
+                    wordWrap: 'on', 
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    readOnly: false,
+                    folding: false,
+                    renderValidationDecorations: 'off'
+                  }}
                 />
               </div>
             </div>
@@ -360,5 +432,6 @@ function App() {
     </div>
   );
 }
+
 
 export default App;
