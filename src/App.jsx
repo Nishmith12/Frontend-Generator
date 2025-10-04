@@ -56,6 +56,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showToast, setShowToast] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
 
   const iframeRef = useRef(null);
 
@@ -81,22 +82,23 @@ function App() {
     setGeneratedCode('// Generating code, please wait...');
     setError(null);
 
-    const systemPrompt = `You are an expert frontend developer specializing in clean, modern web design. Your task is to generate a single, self-contained HTML file based on the user's request.
+    const systemPrompt = `You are an expert frontend developer specializing in clean, modern web design. Your task is to generate or modify a single, self-contained HTML file based on the user's request.
 
 Rules:
 1.  **Single File:** All HTML, CSS, and JavaScript must be in one .html file.
 2.  **Styling:** Use Tailwind CSS for all styling. You MUST include the Tailwind CDN script ('<script src="https://cdn.tailwindcss.com"></script>') in the <head>.
-3.  **No External Files:** Do not use any external images or assets. Use placeholder services like https://placehold.co/ if you need images.
-4.  **Responsiveness:** The layout must be fully responsive and work on mobile devices.
-5.  **Code Only:** Your response must ONLY contain the raw HTML code. Do not include any explanations, comments, or markdown ticks like \`\`\`html.`;
+3.  **Conversational Edits:** If the user's prompt is a follow-up request to modify existing code, you MUST return the complete, modified HTML file. Do not only return the changed snippet.
+4.  **Code Only:** Your response must ONLY contain the raw HTML code. Do not include any explanations, comments, or markdown ticks like \`\`\`html.`;
 
     const apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
 
+    const newHistory = [...conversationHistory, { role: 'user', content: prompt }];
+    
     const payload = {
         model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
         messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
+            ...newHistory
         ]
     };
 
@@ -122,6 +124,8 @@ Rules:
       
       if (code) {
         setGeneratedCode(code.trim());
+        setConversationHistory([...newHistory, { role: 'assistant', content: code.trim() }]);
+        setPrompt(''); // Clear the prompt input after successful generation
       } else {
         throw new Error("Received an empty or invalid response from the API.");
       }
@@ -133,6 +137,13 @@ Rules:
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleNewChat = () => {
+    setPrompt('');
+    setGeneratedCode('// Your generated code will appear here...');
+    setConversationHistory([]);
+    setError(null);
   };
 
   const handleCopyClick = () => {
@@ -156,6 +167,9 @@ Rules:
           </h1>
           <div>
             <span className="text-sm text-slate-400 mr-4">Powered by OpenRouter</span>
+            <button onClick={handleNewChat} className="bg-sky-500/20 hover:bg-sky-500/40 text-sky-300 text-sm font-medium py-1 px-3 rounded-full transition-colors">
+              + New Chat
+            </button>
           </div>
         </div>
       </header>
@@ -172,7 +186,7 @@ Rules:
               id="prompt-input" 
               rows="4" 
               className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 transition-all duration-300 shadow-inner" 
-              placeholder="e.g., A professional hero section for a SaaS product..."
+              placeholder="e.g., A professional hero section... or 'make the title bigger'"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               disabled={isLoading}
@@ -180,12 +194,15 @@ Rules:
             
             {/* New Prompt Templates Section */}
             <div className="mt-3">
-              <label className="block text-sm font-medium text-slate-400 mb-2">Or try an example:</label>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Or start a new chat with an example:</label>
               <div className="flex flex-wrap gap-2">
                 {promptTemplates.map((template, index) => (
                   <button
                     key={index}
-                    onClick={() => setPrompt(template.prompt)}
+                    onClick={() => {
+                      handleNewChat();
+                      setPrompt(template.prompt);
+                    }}
                     disabled={isLoading}
                     className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-sm font-medium py-1 px-3 rounded-full transition-colors disabled:opacity-50"
                   >
