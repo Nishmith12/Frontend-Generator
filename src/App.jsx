@@ -51,7 +51,7 @@ function App() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [framework, setFramework] = useState('html');
-  const [lastGenerationInfo, setLastGenerationInfo] = useState({ tokens: 0, cost: 0 }); // New state for token/cost tracking
+  const [lastGenerationInfo, setLastGenerationInfo] = useState({ tokens: 0, cost: 0 }); // Token/Cost Tracker State
 
   const iframeRef = useRef(null);
 
@@ -84,6 +84,7 @@ function App() {
       if (framework === 'html') {
         iframeRef.current.srcdoc = generatedCode;
       } else {
+        // Preview Guard: Prevent crash when rendering non-HTML code
         iframeRef.current.srcdoc = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#555;padding:1rem;text-align:center;">Live preview is only available for HTML. You can test React/Vue components in a dedicated development environment.</div>`;
       }
     }
@@ -157,6 +158,7 @@ function App() {
         const cleanedCode = code.replace(/```(jsx|javascript|js|html|css|vue|)\s*|```/g, '').trim();
         setGeneratedCode(cleanedCode);
         
+        // Update Token Tracker
         if (usage) {
           setLastGenerationInfo({
             tokens: usage.total_tokens,
@@ -360,4 +362,3 @@ function App() {
 }
 
 export default App;
-
