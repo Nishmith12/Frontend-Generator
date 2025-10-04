@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Editor from '@monaco-editor/react';
-import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'; // Import the compression library
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 
 // --- Helper Components ---
 function Toast({ message, show }) {
@@ -19,8 +19,7 @@ function Toast({ message, show }) {
 }
 
 function MenuIcon() {
-    // Corrected the viewBox attribute in the SVG below
-    return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+  return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
 }
 
 const promptTemplates = [
@@ -29,6 +28,14 @@ const promptTemplates = [
     { title: 'Pricing Page', prompt: 'A pricing page with three tiers: "Basic", "Pro", and "Enterprise". Each tier should have a title, a price, a short list of key features, and a "Sign Up" button. The "Pro" tier should be highlighted as the most popular.' },
     { title: 'Contact Form', prompt: 'A contact form with fields for "Full Name", "Email Address", "Subject", and "Message". Include a "Send Message" submit button.' },
 ];
+
+// --- System Prompts for Different Frameworks ---
+const systemPrompts = {
+  html: `You are an expert frontend developer specializing in clean, modern web design using Tailwind CSS. Your task is to generate a single, self-contained HTML file based on the user's request. Rules: 1. All HTML, CSS, and JavaScript must be in one .html file. 2. Use Tailwind CSS for all styling via the CDN (<script src="https://cdn.tailwindcss.com"></script>). 3. Use placeholder services like https://placehold.co/ for images. 4. Your response must ONLY contain the raw HTML code, with no explanations or markdown ticks.`,
+  react: `You are an expert React developer who creates clean, functional components. Your task is to generate a single JSX file for a React functional component based on the user's request. Rules: 1. Use React hooks (useState, useEffect, etc.) for any state or logic. 2. Use Tailwind CSS classes for all styling (assume Tailwind is already configured in the project). 3. Do not include 'import React...' as it is assumed to be available. 4. Your response must ONLY contain the raw JSX code for the component, starting with 'function ComponentName() { ... }'. Do not include explanations or markdown ticks.`,
+  vue: `You are an expert Vue.js developer who builds elegant and efficient single-file components. Your task is to generate a complete single-file component (.vue) based on the user's request. Rules: 1. The component must be self-contained with <template>, <script setup>, and <style scoped> blocks. 2. Use the Composition API with <script setup>. 3. Use Tailwind CSS classes for all styling within the <template> block. 4. Your response must ONLY contain the raw code for the .vue file. Do not include explanations or markdown ticks.`,
+};
+
 
 // --- Main App Component ---
 function App() {
@@ -43,6 +50,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const [framework, setFramework] = useState('html'); // New state for framework
 
   const iframeRef = useRef(null);
 
@@ -73,8 +81,14 @@ function App() {
   }, [chats]);
 
   useEffect(() => {
-    if (iframeRef.current) iframeRef.current.srcdoc = generatedCode;
-  }, [generatedCode]);
+    if (iframeRef.current) {
+      if (framework === 'html') {
+        iframeRef.current.srcdoc = generatedCode;
+      } else {
+        iframeRef.current.srcdoc = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#555;padding:1rem;text-align:center;">Live preview is only available for HTML. You can test React/Vue components in a dedicated development environment.</div>`;
+      }
+    }
+  }, [generatedCode, framework]);
 
   // --- Core Functions ---
   const handleGenerateClick = async () => {
@@ -89,7 +103,7 @@ function App() {
     }
 
     setIsLoading(true);
-    setGeneratedCode('// Generating code, please wait...');
+    setGeneratedCode(`// Generating ${framework.toUpperCase()} code, please wait...`);
     setError(null);
 
     let currentChatId = activeChatId;
@@ -113,7 +127,7 @@ function App() {
     const newUserMessage = { role: 'user', content: prompt };
     const updatedHistoryForApi = [...historyForApi, newUserMessage];
 
-    const systemPrompt = `You are an expert frontend developer...`; // Abridged
+    const systemPrompt = systemPrompts[framework]; // Select the correct prompt
 
     const payload = {
         model: "deepseek/deepseek-r1-0528-qwen3-8b:free",
@@ -140,8 +154,9 @@ function App() {
       const code = result.choices?.[0]?.message?.content;
       
       if (code) {
-        setGeneratedCode(code.trim());
-        const newAssistantMessage = { role: 'assistant', content: code.trim() };
+        const cleanedCode = code.replace(/```(jsx|javascript|js|html|css|vue|)\s*|```/g, '').trim();
+        setGeneratedCode(cleanedCode);
+        const newAssistantMessage = { role: 'assistant', content: cleanedCode };
         
         setChats(prevChats => prevChats.map(chat => 
           chat.id === currentChatId 
@@ -244,34 +259,48 @@ function App() {
         <main className="flex-grow container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
           <div className="flex flex-col h-full min-h-0">
             <div className="flex-shrink-0">
-              <label htmlFor="prompt-input" className="block text-sm font-medium text-slate-300 mb-2">Your Prompt</label>
+              <div className="flex items-center justify-between mb-3">
+                  <label htmlFor="prompt-input" className="block text-sm font-medium text-slate-300">Your Prompt</label>
+                  <div className="flex items-center gap-2">
+                      <label className="text-sm text-slate-400">Framework:</label>
+                      <select 
+                          value={framework} 
+                          onChange={(e) => setFramework(e.target.value)}
+                          className="bg-slate-700/50 text-slate-300 text-sm rounded-md p-1 border border-slate-700 focus:ring-1 focus:ring-sky-500"
+                      >
+                          <option value="html">HTML</option>
+                          <option value="react">React</option>
+                          <option value="vue">Vue</option>
+                      </select>
+                  </div>
+              </div>
               <textarea 
                 id="prompt-input" 
                 rows="4" 
-                className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500" 
-                placeholder="e.g., A professional hero section..."
+                className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-sky-500/50" 
+                placeholder="e.g., A professional hero section for a SaaS product..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 disabled={isLoading}
               />
               <div className="mt-3">
-                <label className="block text-sm font-medium text-slate-400 mb-2">Or try an example:</label>
-                <div className="flex flex-wrap gap-2">
-                  {promptTemplates.map((template) => (
-                    <button
-                      key={template.title}
-                      onClick={() => { handleNewChat(); setPrompt(template.prompt); }}
-                      className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-sm font-medium py-1 px-3 rounded-full"
-                    >
-                      {template.title}
-                    </button>
-                  ))}
-                </div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Or start a new chat with an example:</label>
+                  <div className="flex flex-wrap gap-2">
+                    {promptTemplates.map((template) => (
+                      <button
+                        key={template.title}
+                        onClick={() => { handleNewChat(); setPrompt(template.prompt); }}
+                        className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 text-sm font-medium py-1 px-3 rounded-full transition-colors disabled:opacity-50"
+                      >
+                        {template.title}
+                      </button>
+                    ))}
+                  </div>
               </div>
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
               <button 
                 id="generate-btn" 
-                className="mt-5 w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center"
+                className="mt-5 w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 shadow-lg shadow-sky-500/20 hover:shadow-xl hover:shadow-cyan-500/20"
                 onClick={handleGenerateClick}
                 disabled={isLoading}
               >
@@ -279,7 +308,7 @@ function App() {
               </button>
             </div>
             
-            <div className="mt-4 flex-grow flex flex-col bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden min-h-0">
+            <div className="mt-4 flex-grow flex flex-col bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden min-h-0 shadow-inner">
               <div className="flex justify-between items-center p-3 border-b border-slate-700 flex-shrink-0 bg-slate-900/50">
                 <h2 className="text-lg font-semibold">Generated Code</h2>
                 <div className="flex gap-2">
@@ -292,10 +321,10 @@ function App() {
               <div className="flex-grow h-0 w-full">
                 <Editor
                   height="100%"
-                  language="html"
+                  language={framework === 'html' ? 'html' : 'javascript'}
                   theme="vs-dark"
                   value={generatedCode}
-                  options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on' }}
+                  options={{ minimap: { enabled: false }, fontSize: 14, wordWrap: 'on', scrollBeyondLastLine: false }}
                 />
               </div>
             </div>
