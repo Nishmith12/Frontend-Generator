@@ -49,7 +49,7 @@ const promptTemplates = [
 // Main App Component
 function App() {
   // IMPORTANT: Paste your OpenRouter API Key here
-  const OPENROUTER_API_KEY = "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";
+  const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 
   const [prompt, setPrompt] = useState('');
   const [generatedCode, setGeneratedCode] = useState('// Your generated code will appear here...');
